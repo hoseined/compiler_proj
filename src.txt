@@ -1,6 +1,7 @@
 122e+2
 /*sag gav ajaklsdj 123987 ()
 saddsad */
+"some string 123"
 int main(){
     return 0;
 }

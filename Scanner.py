@@ -19,7 +19,7 @@ LONG_INTEGER = 504
 FLOAT_NUMBER = 502
 ID_NUMBER = 507
 ONE_LINE_COMMENT_TOKEN = 506
-MULTI_LINE_COMMENT_TOKEN = 507
+MULTI_LINE_COMMENT_TOKEN = 508
 
 
 class Scanner:
@@ -73,7 +73,6 @@ class Scanner:
                 if not plus:
                     power = -power
                 number = number * pow(10, power)
-                print(number)
                 return True, number
 
     def get_number_token(self, *args):
@@ -168,6 +167,14 @@ class Scanner:
                     continue
         self.get_ch()
         return MULTI_LINE_COMMENT_TOKEN
+
+    def get_string_token(self, *args):
+        string_data = ""
+        self.get_ch()
+        while self.character != '"':
+            string_data += self.character
+            self.get_ch()
+        return self.find_keyword("string")
 
     def read_source(self) -> bool:
         try:
