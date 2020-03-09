@@ -35,3 +35,9 @@ until---34
 function---35
 println---36
 false---37
+and---38
+or---39
+not---40
+begin---41
+end---42
+main---43

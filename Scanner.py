@@ -1,15 +1,18 @@
 import string
 import sys
 import re
-from typing import Union, Callable
+from typing import Union, Callable, Tuple
 
 from exceptions import ScannerInitException, ScannerTokenException
 source_address = 'src.txt'
 literal_source_address = 'literal_source.txt'
 keyword_table_address = 'keyword_table.txt'
+symbol_source_address = 'symbol_file.txt'
 delimiter = '---'
 
 
+# TODO cant detect -- or - because of the delimiter
+# TODO have to color the '"' in the strings manually
 # Token Numbers here start at 500
 DECIMAL_NUMBER = 500
 HEXADECIMAL_NUMBER = 501
@@ -30,7 +33,7 @@ class Scanner:
         self.cursor = 0
         self.character = None
         self.literal_switcher = self.read_switch(literal_source_address)
-        self.symbol_switcher = None
+        self.symbol_switcher = self.read_switch(symbol_source_address)
         self.keyword_table = self.read_switch(keyword_table_address)
         self.read_source()
         self.get_ch()
@@ -45,6 +48,16 @@ class Scanner:
         return result
 
     def get_token_func(self, k, switcher) -> Union[None, Callable]:
+        # if self.character == '/':
+        #     self.get_ch()
+        #     if self.character == '/':
+        #         k = '//'
+        #     elif self.character == '*':
+        #         k = '/*'
+        #     else:
+        #         self._errors.update({'token function error': 'no pattern with format /[number][letter] exists'})
+        #         raise ScannerTokenException(self._errors)
+        # TODO check this later ( if error can be issued in the symbol checking part
         for key in switcher.keys():
             if re.match(key, k):
                 try:
@@ -52,12 +65,12 @@ class Scanner:
                 except AttributeError:
                     self._errors.update({
                         'token function attribute error':
-                            'function with token name "{}" doesnt exist'.format(switcher[key])})
+                            'function or symbol with token name "{}" doesnt exist'.format(switcher[key])})
                     raise ScannerTokenException(self._errors)
-        self._errors.update({'token function error': 'no token starting with {} exists'.format(k)})
+        self._errors.update({'token function error': 'no token or symbol starting with {} exists'.format(k)})
         raise ScannerTokenException(self._errors)
 
-    def check_for_scientific(self, number):
+    def check_for_scientific(self, number) -> Tuple[bool, int]:
         if self.character == 'e':
             self.get_ch()
             if self.character == '+' or self.character == '-':
@@ -74,6 +87,8 @@ class Scanner:
                     power = -power
                 number = number * pow(10, power)
                 return True, number
+        else:
+            return False, 0
 
     def get_number_token(self, *args):
         self.character = args[0]
@@ -174,6 +189,7 @@ class Scanner:
         while self.character != '"':
             string_data += self.character
             self.get_ch()
+        self.get_ch()
         return self.find_keyword("string")
 
     def read_source(self) -> bool:
@@ -185,22 +201,45 @@ class Scanner:
             raise ScannerInitException(self._errors)
         return True
 
+    def check_two_char_symbols(self, first_char, second_char):
+        if self.character == first_char:
+            self.get_ch()
+            if self.character == second_char:
+                self.character = (first_char + second_char)
+            else:
+                self.character = first_char
+                self.cursor -= 1
+
+    def check_symbol_file(self) -> Union[None, int]:
+        self.check_two_char_symbols('=', '=')
+        self.check_two_char_symbols('!', '=')
+        self.check_two_char_symbols('<', '=')
+        self.check_two_char_symbols('>', '=')
+        self.check_two_char_symbols('>', '=')
+        self.check_two_char_symbols('+', '+')
+        self.check_two_char_symbols('+', '=')
+        self.check_two_char_symbols('-', '=')
+        self.check_two_char_symbols('/', '=')
+        self.check_two_char_symbols('/', '*')
+        self.check_two_char_symbols('/', '/')
+        for key in self.symbol_switcher.keys():
+            if key == self.character:
+                self.get_ch()
+                return self.symbol_switcher[key]
+        return None
+
     def get_next_token(self):
         while self.character in [' ', '\n']:
             self.get_ch()
-        if self.character == '/':
-            self.get_ch()
-            if self.character == '/':
-                self.character = '//'
-            elif self.character == '*':
-                self.character = '/*'
-            else:
-                self._errors.update({'token function error': 'no pattern with format /[number][letter] exists'})
-                raise ScannerTokenException(self._errors)
-        token = self.get_token_func(self.character, self.literal_switcher)(self.character)
-        return token
+        symbol_token = self.check_symbol_file()
+        if symbol_token is not None:
+            return symbol_token
+        literal_token = self.get_token_func(self.character, self.literal_switcher)(self.character)
+        return literal_token
 
     def get_ch(self) -> str:
+        if self.cursor >= len(self.source_text):
+            return
         self.character = self.source_text[self.cursor]
         self.cursor += 1
 
@@ -208,10 +247,11 @@ class Scanner:
         return self.keyword_table.get(id_string, ID_NUMBER)
 
     def tokenize(self):
-        pass
+        while self.cursor < len(self.source_text):
+            # print("info : source - " + str(len(self.source_text)) + "  cursor: " + str(self.cursor) + "  char : " +
+            #       self.source_text[self.cursor])
+            print(self.get_next_token())
 
 
 scanner = Scanner()
-print(scanner.get_next_token())
-print(scanner.get_next_token())
-print(scanner.get_next_token())
+scanner.tokenize()
