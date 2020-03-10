@@ -1,15 +1,18 @@
-import string
 import sys
 import re
-from typing import Union, Callable, Tuple
+import dominate
+from dominate.tags import *
+from typing import Union, Callable, Tuple, Optional
 
 from exceptions import ScannerInitException, ScannerTokenException
+
 source_address = 'src.txt'
 literal_source_address = 'literal_source.txt'
 keyword_table_address = 'keyword_table.txt'
 symbol_source_address = 'symbol_file.txt'
+color_table_address = 'color_table.txt'
+style_table_address = 'style_table.txt'
 delimiter = '---'
-
 
 # TODO cant detect -- or - because of the delimiter
 # TODO have to color the '"' in the strings manually
@@ -35,8 +38,13 @@ class Scanner:
         self.literal_switcher = self.read_switch(literal_source_address)
         self.symbol_switcher = self.read_switch(symbol_source_address)
         self.keyword_table = self.read_switch(keyword_table_address)
+        self.color_table = self.read_switch(color_table_address)
+        self.style_table = self.read_switch(style_table_address)
         self.read_source()
         self.get_ch()
+        self.dom = dominate.document(title="Colored Code")
+        self.p = p()
+        self.paragraph_list = []
 
     def read_switch(self, address) -> dict:
         result = {}
@@ -90,6 +98,15 @@ class Scanner:
         else:
             return False, 0
 
+    def add_html_text(self, content, keyword):
+        content = str(content)
+        color = self.color_table.get(keyword)
+        text_style = self.style_table.get(keyword, None)
+        if text_style is None:
+            self.p.add_raw_string('<font color="{}">{}</font>'.format(color, content))
+        else:
+            self.p.add_raw_string('<{}><font color="{}">{}</font></{}>'.format(text_style, color, content, text_style))
+
     def get_number_token(self, *args):
         self.character = args[0]
         number = 0
@@ -112,6 +129,7 @@ class Scanner:
             if self.character == 'F':
                 # float number
                 self.get_ch()
+                self.add_html_text(str(number) + "F", "Real")
                 return FLOAT_NUMBER
             # i.e 5e+2 or 5e-2
             is_scientific, scientific_number = self.check_for_scientific(number)
@@ -123,6 +141,7 @@ class Scanner:
             if self.character == 'L':
                 # long integer
                 self.get_ch()
+                self.add_html_text(str(number), "Integer")
                 return LONG_INTEGER
             elif self.character == 'x':
                 if number == 0:
@@ -148,6 +167,7 @@ class Scanner:
                 if is_scientific:
                     number = scientific_number
                     return SCIENTIFIC_NOTATION
+                self.add_html_text(str(number), "Integer")
                 return DECIMAL_NUMBER
 
     def get_id_token(self, *args):
@@ -156,7 +176,13 @@ class Scanner:
         while re.match('[0-9]', self.character) or re.match('[a-zA-z]', self.character):
             id_string += self.character
             self.get_ch()
-        return self.find_keyword(id_string)
+        token = self.find_keyword(id_string)
+        if token == ID_NUMBER:
+            self.add_html_text(id_string, "Identifiers")
+        else:
+            self.add_html_text(id_string, "Reserved Key Words")
+        return token
+
 
     def get_one_line_comment_token(self, *args):
         self.get_ch()
@@ -165,6 +191,9 @@ class Scanner:
             comment_string += self.character
             self.get_ch()
         self.get_ch()
+        self.add_html_text(comment_string, "Comments")
+        self.paragraph_list.append(self.p)
+        self.p = p()
         return ONE_LINE_COMMENT_TOKEN
 
     def get_multi_line_comment_token(self, *args):
@@ -181,6 +210,7 @@ class Scanner:
                 else:
                     continue
         self.get_ch()
+        self.add_html_text(comment_string, "Comments")
         return MULTI_LINE_COMMENT_TOKEN
 
     def get_string_token(self, *args):
@@ -190,6 +220,7 @@ class Scanner:
             string_data += self.character
             self.get_ch()
         self.get_ch()
+        self.add_html_text(string_data, "Strings")
         return self.find_keyword("string")
 
     def read_source(self) -> bool:
@@ -210,7 +241,7 @@ class Scanner:
                 self.character = first_char
                 self.cursor -= 1
 
-    def check_symbol_file(self) -> Union[None, int]:
+    def check_symbol_file(self) -> Tuple[Union[None, int], Optional[str]]:
         self.check_two_char_symbols('=', '=')
         self.check_two_char_symbols('!', '=')
         self.check_two_char_symbols('<', '=')
@@ -224,15 +255,23 @@ class Scanner:
         self.check_two_char_symbols('/', '/')
         for key in self.symbol_switcher.keys():
             if key == self.character:
+                original_char = self.character
                 self.get_ch()
-                return self.symbol_switcher[key]
-        return None
+                return self.symbol_switcher[key], original_char
+        return None, ""
 
     def get_next_token(self):
         while self.character in [' ', '\n']:
+            if self.character == ' ':
+                self.p.add_raw_string(self.character)
+            if self.character == '\n':
+                self.paragraph_list.append(self.p)
+                self.p = p()
             self.get_ch()
-        symbol_token = self.check_symbol_file()
+        symbol_token, original_char = self.check_symbol_file()
         if symbol_token is not None:
+            print(original_char)
+            self.add_html_text(original_char, "Other")
             return symbol_token
         literal_token = self.get_token_func(self.character, self.literal_switcher)(self.character)
         return literal_token
@@ -247,10 +286,21 @@ class Scanner:
         return self.keyword_table.get(id_string, ID_NUMBER)
 
     def tokenize(self):
+        counter = 0
         while self.cursor < len(self.source_text):
             # print("info : source - " + str(len(self.source_text)) + "  cursor: " + str(self.cursor) + "  char : " +
             #       self.source_text[self.cursor])
             print(self.get_next_token())
+            counter += 1
+        print("token count: " + str(counter))
+        with open('result.html', 'w') as result:
+            with self.dom:
+                with div(id='main') as div_main:
+                    # add last paragraph
+                    self.paragraph_list.append(self.p)
+                    for paragraph in self.paragraph_list:
+                        div_main.add(paragraph)
+                result.write(str(html(body(div_main))))
 
 
 scanner = Scanner()

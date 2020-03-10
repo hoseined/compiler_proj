@@ -1,0 +1,8 @@
+Reserved Key Words---blue
+Identifiers---red
+Integer---orange
+Real---orange
+Strings---green
+Special Character---green
+Comments---grey
+Other---black

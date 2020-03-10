@@ -1,7 +1,10 @@
-122e+2
-/*sag gav ajaklsdj 123987 ()
-saddsad */
-"some string 123"
+0.22F
+/* askldjasd
+alsdkljkl */
+// sadasdsad
 int main(){
+    for (int i=0;i<5;i++){
+        println(i);
+    }
     return 0;
 }
