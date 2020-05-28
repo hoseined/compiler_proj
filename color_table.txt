@@ -3,6 +3,6 @@ Identifiers---red
 Integer---orange
 Real---orange
 Strings---green
-Special Character---green
+Special---green
 Comments---grey
 Other---black

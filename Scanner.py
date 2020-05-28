@@ -16,6 +16,7 @@ delimiter = '---'
 
 # TODO cant detect -- or - because of the delimiter
 # TODO have to color the '"' in the strings manually
+# TODO no scientific notation html
 # Token Numbers here start at 500
 DECIMAL_NUMBER = 500
 HEXADECIMAL_NUMBER = 501
@@ -136,6 +137,7 @@ class Scanner:
             if is_scientific:
                 number = scientific_number
                 return SCIENTIFIC_NOTATION
+            self.add_html_text(number, "Real")
             return DOUBLE_NUMBER
         else:
             if self.character == 'L':
@@ -154,6 +156,7 @@ class Scanner:
                         self.get_ch()
                         counter += 1
                     number = int(hex_string, 16)
+                    self.add_html_text("0x" + hex_string, "Other")
                     return HEXADECIMAL_NUMBER
                 else:
                     # wrong format i.e 0298x..
@@ -183,7 +186,6 @@ class Scanner:
             self.add_html_text(id_string, "Reserved Key Words")
         return token
 
-
     def get_one_line_comment_token(self, *args):
         self.get_ch()
         comment_string = ""
@@ -191,7 +193,7 @@ class Scanner:
             comment_string += self.character
             self.get_ch()
         self.get_ch()
-        self.add_html_text(comment_string, "Comments")
+        self.add_html_text("// " + comment_string, "Comments")
         self.paragraph_list.append(self.p)
         self.p = p()
         return ONE_LINE_COMMENT_TOKEN
@@ -210,17 +212,28 @@ class Scanner:
                 else:
                     continue
         self.get_ch()
+        self.add_html_text("/*", "Other")
         self.add_html_text(comment_string, "Comments")
+        self.add_html_text("*/", "Other")
         return MULTI_LINE_COMMENT_TOKEN
 
     def get_string_token(self, *args):
         string_data = ""
         self.get_ch()
+        self.add_html_text('"', "Other")
         while self.character != '"':
+            if self.character == '\\':
+                self.get_ch()
+                self.add_html_text(string_data, "Strings")
+                self.add_html_text("\\" + self.character, "Special")
+                string_data = ""
+                self.get_ch()
+                continue
             string_data += self.character
             self.get_ch()
         self.get_ch()
         self.add_html_text(string_data, "Strings")
+        self.add_html_text('"', "Other")
         return self.find_keyword("string")
 
     def read_source(self) -> bool:
@@ -276,7 +289,7 @@ class Scanner:
         literal_token = self.get_token_func(self.character, self.literal_switcher)(self.character)
         return literal_token
 
-    def get_ch(self) -> str:
+    def get_ch(self) -> None:
         if self.cursor >= len(self.source_text):
             return
         self.character = self.source_text[self.cursor]
