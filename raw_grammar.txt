@@ -1,4 +1,4 @@
-S : EXP
+S : EXP $
 EXP : TERM EXP'
 EXP' : + TERM EXP'
 EXP' : - TERM EXP'
@@ -6,13 +6,13 @@ EXP' : #
 TERM : FACTOR TERM'
 TERM' : / FACTOR TERM'
 TERM' : * FACTOR TERM'
-TERM : #
+TERM' : #
 FACTOR : ID
 ID : id ID'
 ID' : ++
 ID' : --
 ID' : #
-ID : ++ id
 ID : -- id
+ID : ++ id
 FACTOR : num
 FACTOR : ( EXP )
