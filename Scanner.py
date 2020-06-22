@@ -29,6 +29,13 @@ ONE_LINE_COMMENT_TOKEN = 506
 MULTI_LINE_COMMENT_TOKEN = 508
 
 
+class Token:
+    def __init__(self, symbol, scanner_num, mem_address=None):
+        self.symbol = symbol
+        self.scanner_num = scanner_num
+        self.mem_address = mem_address
+
+
 class Scanner:
 
     def __init__(self):
@@ -131,20 +138,20 @@ class Scanner:
                 # float number
                 self.get_ch()
                 self.add_html_text(str(number) + "F", "Real")
-                return FLOAT_NUMBER
+                return FLOAT_NUMBER, number
             # i.e 5e+2 or 5e-2
             is_scientific, scientific_number = self.check_for_scientific(number)
             if is_scientific:
                 number = scientific_number
-                return SCIENTIFIC_NOTATION
+                return SCIENTIFIC_NOTATION, number
             self.add_html_text(number, "Real")
-            return DOUBLE_NUMBER
+            return DOUBLE_NUMBER, number
         else:
             if self.character == 'L':
                 # long integer
                 self.get_ch()
                 self.add_html_text(str(number), "Integer")
-                return LONG_INTEGER
+                return LONG_INTEGER, number
             elif self.character == 'x':
                 if number == 0:
                     # hexadecimal number
@@ -157,7 +164,7 @@ class Scanner:
                         counter += 1
                     number = int(hex_string, 16)
                     self.add_html_text("0x" + hex_string, "Other")
-                    return HEXADECIMAL_NUMBER
+                    return HEXADECIMAL_NUMBER, number
                 else:
                     # wrong format i.e 0298x..
                     self._errors.update({
@@ -169,9 +176,9 @@ class Scanner:
                 is_scientific, scientific_number = self.check_for_scientific(number)
                 if is_scientific:
                     number = scientific_number
-                    return SCIENTIFIC_NOTATION
+                    return SCIENTIFIC_NOTATION, number
                 self.add_html_text(str(number), "Integer")
-                return DECIMAL_NUMBER
+                return DECIMAL_NUMBER, number
 
     def get_id_token(self, *args):
         id_string = "" + args[0]
@@ -184,7 +191,7 @@ class Scanner:
             self.add_html_text(id_string, "Identifiers")
         else:
             self.add_html_text(id_string, "Reserved Key Words")
-        return token
+        return token, id_string
 
     def get_one_line_comment_token(self, *args):
         self.get_ch()
@@ -196,7 +203,7 @@ class Scanner:
         self.add_html_text("// " + comment_string, "Comments")
         self.paragraph_list.append(self.p)
         self.p = p()
-        return ONE_LINE_COMMENT_TOKEN
+        return ONE_LINE_COMMENT_TOKEN, comment_string
 
     def get_multi_line_comment_token(self, *args):
         self.get_ch()
@@ -215,7 +222,7 @@ class Scanner:
         self.add_html_text("/*", "Other")
         self.add_html_text(comment_string, "Comments")
         self.add_html_text("*/", "Other")
-        return MULTI_LINE_COMMENT_TOKEN
+        return MULTI_LINE_COMMENT_TOKEN, comment_string
 
     def get_string_token(self, *args):
         string_data = ""
@@ -234,7 +241,7 @@ class Scanner:
         self.get_ch()
         self.add_html_text(string_data, "Strings")
         self.add_html_text('"', "Other")
-        return self.find_keyword("string")
+        return self.find_keyword("string"), string_data
 
     def read_source(self) -> bool:
         try:
@@ -283,11 +290,10 @@ class Scanner:
             self.get_ch()
         symbol_token, original_char = self.check_symbol_file()
         if symbol_token is not None:
-            print(original_char)
             self.add_html_text(original_char, "Other")
-            return symbol_token
-        literal_token = self.get_token_func(self.character, self.literal_switcher)(self.character)
-        return literal_token
+            return Token(scanner_num=symbol_token, symbol=original_char)
+        literal_token, value = self.get_token_func(self.character, self.literal_switcher)(self.character)
+        return Token(scanner_num=literal_token, symbol=value)
 
     def get_ch(self) -> None:
         if self.cursor >= len(self.source_text):
@@ -303,9 +309,9 @@ class Scanner:
         while self.cursor < len(self.source_text):
             # print("info : source - " + str(len(self.source_text)) + "  cursor: " + str(self.cursor) + "  char : " +
             #       self.source_text[self.cursor])
-            print(self.get_next_token())
+            # print(self.get_next_token())
             counter += 1
-        print("token count: " + str(counter))
+        # print("token count: " + str(counter))
         with open('result.html', 'w') as result:
             with self.dom:
                 with div(id='main') as div_main:
@@ -314,7 +320,3 @@ class Scanner:
                     for paragraph in self.paragraph_list:
                         div_main.add(paragraph)
                 result.write(str(html(body(div_main))))
-
-
-scanner = Scanner()
-scanner.tokenize()

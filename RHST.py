@@ -2,6 +2,10 @@ import functools
 import pandas as pd
 import numpy as np
 
+from CodeGen import CodeGen
+from Scanner import Scanner
+
+
 def calltracker(func):
     @functools.wraps(func)
     def wrapper(*args):
@@ -17,23 +21,50 @@ PREDICT_ADD_FOLLOW = 'PREDICT ADD FOLLOW'
 
 
 class RHST:
-    grammar_address = 'raw_grammar.txt'
+    grammar_address = 'test2.txt'
 
     def __init__(self):
+        self.scanner = Scanner()
+        self.code_gen = CodeGen()
         self.prod_number = {}
         self.grammar_dict = self.read_raw_grammar()
-        print("grammar : ", self.grammar_dict)
+        self.semantic_stack = ['@KIR', 'PHEAD']
+        # print("grammar : ", self.grammar_dict)
         self.nullable_dict = {}
         self.fill_nullable_dict()
-        print("is_nullable : ", self.nullable_dict)
+        # print("is_nullable : ", self.nullable_dict)
         self.first_dict = self.compute_first_dict()
-        print("first : ", self.first_dict)
+        # print("first : ", self.first_dict)
         self.follow_dict = self.compute_follow_dict()
-        print("follow : ", self.follow_dict)
+        # print("follow : ", self.follow_dict)
         self.predict_dict = self.compute_predict_dict()
-        print("predict : ", self.predict_dict)
+        # print("predict : ", self.predict_dict)
         self.parse_table = self.generate_parse_table()
-        print("\n", self.parse_table)
+        # print("\n", self.parse_table.to_string())
+
+    def parse_token(self):
+        token = self.scanner.get_next_token()
+        top_symbol = self.semantic_stack.pop()
+        if top_symbol.startswith('@'):
+            self.code_gen.generate(top_symbol, self)
+            top_symbol = self.semantic_stack.pop()
+        elif not top_symbol.isupper():
+            if token.type == top_symbol:
+                return
+            else:
+                pass
+                # ERROR
+        n_prod_rule = self.parse_table[token.symbol][top_symbol]
+        rule = self.get_rule(n_prod_rule)
+        for item in rule.split(' '):
+            self.semantic_stack.append(item)
+
+    def get_rule(self, rule_number):
+        for k in self.prod_number.keys():
+            prod_list = self.prod_number[k]
+            for item in prod_list:
+                if item[1] == rule_number:
+                    return item[0]
 
     @calltracker
     def read_raw_grammar(self) -> dict:
@@ -123,10 +154,10 @@ class RHST:
             raise Exception("you need to call compute_first_dict before this function")
         result = {}
         for k in self.grammar_dict.keys():
-            result[k] = self.follow(k)
+            result[k] = self.follow(k, [k])
         return result
 
-    def follow(self, symbol) -> set:
+    def follow(self, symbol, ignore_list) -> set:
         follow_symbols = []
         for k2 in self.grammar_dict.keys():
             for subject in self.grammar_dict[k2]:
@@ -137,8 +168,12 @@ class RHST:
             for k, v in item.items():
                 if k == symbol and v == '':
                     continue
+                if k in ignore_list:
+                    break
                 if v == '':
-                    result.update(self.follow(k))
+                    next_level_list = ignore_list
+                    next_level_list.append(k)
+                    result.update(self.follow(k, next_level_list))
                 terms = v.split(' ')
                 for term in terms:
                     is_terminal = term.isupper()
@@ -152,7 +187,9 @@ class RHST:
                             result.update(self.first_dict[term])
                         else:
                             result.update(self.first_dict[term])
-                            result.update(self.follow(term))
+                            next_level_list = ignore_list
+                            next_level_list.append(term)
+                            result.update(self.follow(term, next_level_list))
         if symbol == 'S':
             result.add('$')
         if '#' in result:
@@ -239,4 +276,5 @@ class RHST:
         return df
 
 
-RHST()
+x = RHST()
+x.parse_token()
